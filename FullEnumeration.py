@@ -8,8 +8,10 @@ params = {
     "oper_lambda_param": 5,
     "due_lambda_param": 10,
     "weight_lambda_param": 5,
-    "consideration" : ["flow_time", "tardiness", "weighted_tardiness"]
+    "consideration": ["flow_time", "tardiness", "weighted_tardiness"]
 }
+
+
 class DataCalculator:
 
     def cal_flow_time(self, data):
@@ -34,7 +36,7 @@ class DataCalculator:
         df = pd.DataFrame(data).T
         time = df.loc["소요시간"]
         tardiness = np.zeros(len(time))
-        due = self.df.loc["제출기한"]
+        due = df.loc["제출기한"]
 
         for i in range(len(time)):
             tardiness[i] = max(0, due[i] - time[i])
@@ -47,24 +49,24 @@ class DataCalculator:
 
         return sum(tardiness * weight)
 
+
 class FullEnumeration(DataCalculator):
     def __init__(self, df):
         self.df = df
         self.data_list = []
         self.column_num = len(self.df.columns)
 
-
     def search(self, consideration):
+        tardiness_data = None
         # 모든 경우의 수
         chart = list(itertools.permutations(range(self.column_num), self.column_num))
         # 모든 경우의 수로 데이터 프레임 만들기 (데이터는
-
 
         for i in chart:
             e = 0
             self.datas = list(range(self.column_num))
             for j in i:
-                self.datas[e] =  self.df.iloc[:, j]
+                self.datas[e] = self.df.iloc[:, j]
                 e += 1
             self.data_list.append(self.datas)
 
@@ -108,9 +110,6 @@ class FullEnumeration(DataCalculator):
 
 
 
-        # 모든 경우의 수로 순서 배열하는 알고리즘 짜줘
-
-
 def data_process():
     df = pd.read_csv("examdata.csv", encoding="CP949")
 
@@ -118,13 +117,14 @@ def data_process():
     df = df.iloc[:, 1:]
 
     return df
+
+
 def main():
     data_generator.gen_main(params["num_job"], params["oper_lambda_param"],
                             params["due_lambda_param"], params["weight_lambda_param"])
 
     fe = FullEnumeration(data_process())
     fe.search(params["consideration"])
-
 
 
 if __name__ == "__main__":
