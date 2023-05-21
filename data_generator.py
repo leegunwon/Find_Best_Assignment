@@ -12,12 +12,11 @@ class DataGenerator:
 
         return data
 
-def main():
-    num_job = 5
-    oper_time = DataGenerator(5, num_job)
-    due_time = DataGenerator(20, num_job)
+def gen_main(num_job, oper_lambda_param, due_lambda_param, weight_lambda_param):
+    oper_time = DataGenerator(oper_lambda_param, num_job)
+    due_time = DataGenerator(due_lambda_param, num_job)
     arr_time = np.zeros(num_job)
-    weight = DataGenerator(10, num_job)
+    weight = DataGenerator(weight_lambda_param, num_job)
 
     rand_data = pd.DataFrame((arr_time, oper_time.generate(), due_time.generate(), weight.generate()),
                              index=["출제시간", "소요시간", "제출기한", "성적반영비율"],
@@ -25,4 +24,4 @@ def main():
     rand_data.to_csv("examdata.csv", index=True, header=True, encoding="CP949")
 
 if __name__ == "__main__":
-    main()
+    gen_main()
