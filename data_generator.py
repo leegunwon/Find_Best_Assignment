@@ -2,21 +2,23 @@ import numpy as np
 import pandas as pd
 
 class DataGenerator:
-    def __init__(self, lambda_param, num_job,):
-        self.lambda_param = lambda_param
+    def __init__(self, mean, sigma, num_job,):
+        self.mean = mean
         self.num_job = num_job
+        self.sigma = sigma
 
 
     def generate(self):
-        data = np.random.exponential(scale=1/self.lambda_param, size=self.num_job)
+        data = np.random.normal(self.mean, self.sigma, size=self.num_job)
+        data = data.astype(int)
 
-        return data
+        return  data
 
-def gen_main(num_job, oper_lambda_param, due_lambda_param, weight_lambda_param):
-    oper_time = DataGenerator(oper_lambda_param, num_job)
-    due_time = DataGenerator(due_lambda_param, num_job)
+def gen_main(num_job, oper_mean, oper_sigma, due_mean, due_sigma, weight_mean, weight_sigma):
+    oper_time = DataGenerator(oper_mean, oper_sigma, num_job)
+    due_time = DataGenerator(due_mean, due_sigma, num_job)
     arr_time = np.zeros(num_job)
-    weight = DataGenerator(weight_lambda_param, num_job)
+    weight = DataGenerator(weight_mean, weight_sigma, num_job)
 
     rand_data = pd.DataFrame((arr_time, oper_time.generate(), due_time.generate(), weight.generate()),
                              index=["출제시간", "소요시간", "제출기한", "성적반영비율"],
