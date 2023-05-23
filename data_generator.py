@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-class DataGenerator:
+class DataGenerator():
     def __init__(self, mean, sigma, num_job,):
         self.mean = mean
         self.num_job = num_job
