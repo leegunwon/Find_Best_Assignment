@@ -6,17 +6,20 @@ import data_generator
 import time
 
 params = {
-    "num_job": 10,
+    "num_job": 8,
     "oper_mean": 10,
     "oper_sigma": 2,
     "due_mean": 20,
     "due_sigma": 5,
     "weight_mean": 5,
     "weight_sigma": 1,
+    # "tardiness", "weighted_tardiness", "flow_time", "makespan"
+    "consideration": ["flow_time"],
     'MUT': 0.5,  # 변이확률(%)
-    'END' : 0.9,  # 설정한 비율만큼 chromosome이 수렴하면 탐색을 멈추게 하는 파라미터 (%)
-    'POP_SIZE' : 10,  # population size 10 ~ 100
-    'NUM_OFFSPRING' :5, # 한 세대에 발생하는 자식 chromosome의 수
+    'END': 0.8,  # 설정한 비율만큼 chromosome이 수렴하면 탐색을 멈추게 하는 파라미터 (%)
+    'POP_SIZE': 10,  # population size 10 ~ 100
+    'NUM_OFFSPRING': 5,  # 한 세대에 발생하는 자식 chromosome의 수
+    'SELECTION_PRESSURE': 3  # 1보다 큰 정수
 }
 
 
@@ -44,7 +47,6 @@ class GA():
     def flow_time_calaulator(self, chromosome):
         flow_time = [0 for i in range(len(chromosome))]
         makespan = 0
-
 
         for j in chromosome:
             flow_time[j] = makespan + self.time[j]
@@ -119,32 +121,57 @@ class GA():
 
 
     def selection_operater(self, fitness):
-        selection = []
-        for i in range(self.pop_size-1):
-            for j in range(self.pop_size - i):
-                selection.append(i)
+        """
+        품질 비례 룰렛휠
+        :param fitness: [job sequence[(int) * num_jobs], fitness(float)]
+        self.mom_ch: [job sequence[(int) * num_jobs]]
+        self.dad_ch: [job sequence[(int) * num_jobs]]
+        """
 
-        temp = np.random.randint(0, len(selection))
+        selection = [(fitness[-1][1] - fitness[i][1]) + (fitness[-1][1] - fitness[0][1])/(params['SELECTION_PRESSURE']-1)
+                     for i in range(len(fitness))]
 
-        self.parent_ch = fitness[selection[temp]][0]
+        temp1 = 0
+        temp2 = 0
+
+        while(temp1 == temp2):
+            temp1 = np.random.randint(0, sum(selection))
+            temp2 = np.random.randint(0, sum(selection))
+
+        while(temp1 > 0):
+            j = 0
+            temp1 -= selection[j]
+
+        while (temp2 > 0):
+            k = 0
+            temp2 -= selection[k]
+
+        self.mom_ch = fitness[j][0]
+        self.dad_ch = fitness[k][0]
 
 
     def crossover_operater(self):
+        """
+        싸이클 교차
+        :return: self.offspring_ch [offsprings[job sequence[(int) * num_job] * num_offsprings]]
+        """
         self.offspring_ch = []
-        sample = set(range(self.num_job))
 
         for i in range(self.num_offspring):
+            sample = list(range(self.num_job))
+            chromosome = [i for i in range(self.num_job)]
 
-            num = np.random.randint(self.num_job-1) + 1  # 1~10까지의 숫자 중 하나를 랜덤하게 뽑음
+            for j in sample:
+                gene = self.mom_ch[j]
+                chromosome[j] = gene
 
-            cromosome = self.parent_ch[0:num]            # 랜덤 숫자로 슬라이싱
-            cromosome = self.mutation_operater(cromosome)   # 랜덤 숫자로 슬라이싱한 chromosome을 mutation_operater에 넣어줌
+                while(self.mom_ch[j] != gene):
+                    num = sample.pop(self.dad_ch.index(gene))    # 아빠 해에서 선택된 gene과 동일한 값의 gene 있는 위치를 찾는다
+                    gene = self.mom_ch[num]
+                    chromosome[num] = gene          # 그 위치에 엄마 해의 gene값을 자식 해에 유전한다.
 
-            rest = list(sample - set(cromosome))  # 0~10까지 숫자 중 어떤게 사용됐는지 확인하는 코드
-            random.shuffle(rest)    # rest를 랜덤하게 섞어줌
-            cromosome.extend(rest)  # cromosome에 rest를 더해줌
-
-            self.offspring_ch.append(cromosome)
+            cromosome = self.mutation_operater(chromosome)   # 랜덤 숫자로 슬라이싱한 chromosome을 mutation_operater에 넣어줌
+            self.offspring_ch.append(chromosome)
 
 
     def mutation_operater(self, chromosome):
@@ -154,7 +181,7 @@ class GA():
             if len(chromosome) == 1:
                 pass
             else:
-                if num >= (params["MUT"]* 10):
+                if num >= (params["MUT"]*10):
                     pass
                 else:
                     if i == 0:
@@ -181,14 +208,14 @@ class GA():
         # 초기 population 생성
         self.initial_population()
 
-        if "flow_time" in FE.params["consideration"]:
+        if "flow_time" in params["consideration"]:
             while True:
                 count = 1
 
                 w_fitness = self.flow_time_get_fitness()
                 fitness = self.sort_population(w_fitness)
 
-                self.print_average_fitness(fitness)
+               # self.print_average_fitness(fitness)
 
                 self.selection_operater(fitness)
                 self.crossover_operater()
@@ -203,7 +230,7 @@ class GA():
                     break
                 generation += 1
 
-        if "tardiness" in FE.params["consideration"]:
+        if "tardiness" in params["consideration"]:
             while True:
                 count = 1
                 w_fitness = self.tardiness_get_fitness()
@@ -226,7 +253,7 @@ class GA():
 
                 generation += 1
 
-        if "weighted_tardiness" in FE.params["consideration"]:
+        if "weighted_tardiness" in params["consideration"]:
             while True:
                 count = 1
 
@@ -234,7 +261,7 @@ class GA():
                 fitness = self.sort_population(w_fitness)
 
                 # 평균 값 출력
-                self.print_average_fitness(fitness)
+               # self.print_average_fitness(fitness)
 
                 self.selection_operater(fitness)
                 self.crossover_operater()
@@ -265,14 +292,12 @@ def main():
 
 if __name__ == "__main__":
     t1 =time.time()
+    FE.params["num_job"] = params["num_job"]
     FE.main()
     t2 = time.time()
     main()
     t3 = time.time()
-    print(t2-t1)
-    print(t3-t2)
-
-
+    print(f"FullEnumeration: {t2-t1}, GA: {t3-t2}")
 
 
 
