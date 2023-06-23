@@ -6,7 +6,7 @@ import data_generator
 import time
 
 params = {
-    "num_job": 8,
+    "num_job": 7,
     "oper_mean": 10,
     "oper_sigma": 2,
     "due_mean": 20,
@@ -15,7 +15,7 @@ params = {
     "weight_sigma": 1,
     # "tardiness", "weighted_tardiness", "flow_time", "makespan"
     "consideration": ["flow_time"],
-    'MUT': 0.5,  # 변이확률(%)
+    'MUT': 0.2,  # 변이확률(%)
     'END': 0.8,  # 설정한 비율만큼 chromosome이 수렴하면 탐색을 멈추게 하는 파라미터 (%)
     'POP_SIZE': 10,  # population size 10 ~ 100
     'NUM_OFFSPRING': 5,  # 한 세대에 발생하는 자식 chromosome의 수
@@ -117,10 +117,11 @@ class GA():
         fitness.sort(key=lambda x: x[1], reverse=False)
         for i in range(len(fitness)):
             self.population[i] = fitness[i][0]
+
         return fitness
 
 
-    def selection_operater(self, fitness):
+    def Roulette_wheel_selection(self, fitness):
         """
         품질 비례 룰렛휠
         :param fitness: [job sequence[(int) * num_jobs], fitness(float)]
@@ -131,26 +132,104 @@ class GA():
         selection = [(fitness[-1][1] - fitness[i][1]) + (fitness[-1][1] - fitness[0][1])/(params['SELECTION_PRESSURE']-1)
                      for i in range(len(fitness))]
 
-        temp1 = 0
-        temp2 = 0
-
-        while(temp1 == temp2):
+        while(True):
             temp1 = np.random.randint(0, sum(selection))
             temp2 = np.random.randint(0, sum(selection))
 
-        while(temp1 > 0):
-            j = 0
-            temp1 -= selection[j]
+            for i in range(len(selection)):
+                temp1 -= selection[i]
+                if temp1 <= 0:
+                    p = i
+                    break
 
-        while (temp2 > 0):
-            k = 0
-            temp2 -= selection[k]
+            for i in range(len(selection)):
+                temp2 -= selection[i]
+                if temp2 <= 0:
+                    k = i
+                    break
 
-        self.mom_ch = fitness[j][0]
+            if p != k:
+                break
+
+        self.mom_ch = fitness[p][0]
         self.dad_ch = fitness[k][0]
 
 
-    def crossover_operater(self):
+    def Sequence_crossover(self):
+        """
+        순서 교차
+        :return:
+        """
+        self.offspring_ch = []
+
+        for i in range(self.num_offspring):
+            slice = random.sample(range(self.num_job), 2)
+            slice.sort()
+            chromosome = []
+            filter = self.mom_ch[slice[0]:slice[1]]
+
+
+            for j in range(slice[1], self.num_job):
+                if len(chromosome) == slice[0]:
+                    for k in range(slice[0], slice[1]):
+                        chromosome.append(self.mom_ch[k])
+
+                if self.dad_ch[j] not in filter:
+                    chromosome.append(self.dad_ch[j])
+
+            for j in range(0, slice[1]):
+                if len(chromosome) == slice[0]:
+                    for k in range(slice[0], slice[1]):
+                        chromosome.append(self.mom_ch[k])
+
+                if self.dad_ch[j] not in filter:
+                    chromosome.append(self.dad_ch[j])
+
+            chromosome = self.mutation_operater(chromosome)
+
+            self.offspring_ch.append(chromosome)
+
+
+    def PMX_crossover(self):
+        """
+        PMX 교차
+        :return: self.offspring_ch [offsprings[job sequence[(int) * num_job] * num_offsprings]]
+        """
+        self.offspring_ch = []
+
+        for i in range(self.num_offspring):
+            slice = random.sample(range(self.num_job), 2)
+            slice.sort()
+            chromosome = [i for i in range(self.num_job)]
+            filter = self.mom_ch[slice[0]:slice[1]]
+
+            for j in range(slice[0], slice[1]):
+                chromosome[j] = self.mom_ch[j]
+
+            for j in range(0, slice[0]):
+                gene = self.dad_ch[j]
+
+                while(gene in filter):
+                    num = self.mom_ch.index(gene)
+                    gene = self.dad_ch[num]
+
+                chromosome[j] = gene
+
+            for j in range(slice[1], self.num_job):
+                gene = self.dad_ch[j]
+
+                while (gene in filter):
+                    num = self.mom_ch.index(gene)
+                    gene = self.dad_ch[num]
+
+                chromosome[j] = gene
+
+            chromosome = self.mutation_operater(chromosome)
+
+            self.offspring_ch.append(chromosome)
+
+
+    def Cycle_crossover(self):
         """
         싸이클 교차
         :return: self.offspring_ch [offsprings[job sequence[(int) * num_job] * num_offsprings]]
@@ -170,7 +249,9 @@ class GA():
                     gene = self.mom_ch[num]
                     chromosome[num] = gene          # 그 위치에 엄마 해의 gene값을 자식 해에 유전한다.
 
-            cromosome = self.mutation_operater(chromosome)   # 랜덤 숫자로 슬라이싱한 chromosome을 mutation_operater에 넣어줌
+            chromosome = self.mutation_operater(chromosome)   # 랜덤 숫자로 슬라이싱한 chromosome을 mutation_operater에 넣어줌
+
+
             self.offspring_ch.append(chromosome)
 
 
@@ -217,8 +298,8 @@ class GA():
 
                # self.print_average_fitness(fitness)
 
-                self.selection_operater(fitness)
-                self.crossover_operater()
+                self.Roulette_wheel_selection(fitness)
+                self.Sequence_crossover()
                 self.replacement_operator()
 
                 for i in range(self.pop_size - 1):
@@ -298,11 +379,6 @@ if __name__ == "__main__":
     main()
     t3 = time.time()
     print(f"FullEnumeration: {t2-t1}, GA: {t3-t2}")
-
-
-
-
-
 
 
 
