@@ -1,4 +1,3 @@
-import FullEnumeration_consideration as FE
 import pandas as pd
 import numpy as np
 import random
@@ -6,7 +5,7 @@ import data_generator
 import time
 
 params = {
-    "num_job": 7,
+    "num_job": 20,
     "oper_mean": 10,
     "oper_sigma": 2,
     "due_mean": 20,
@@ -19,22 +18,30 @@ params = {
     'END': 0.8,  # 설정한 비율만큼 chromosome이 수렴하면 탐색을 멈추게 하는 파라미터 (%)
     'POP_SIZE': 10,  # population size 10 ~ 100
     'NUM_OFFSPRING': 5,  # 한 세대에 발생하는 자식 chromosome의 수
-    'SELECTION_PRESSURE': 3  # 1보다 큰 정수
+    'SELECTION_PRESSURE': 3  # 1보다 큰 정수 1< x < 10
 }
+def data_process():
+    df = pd.read_csv("examdata.csv", encoding="CP949")
 
+    df.set_index(df.iloc[:, 0], inplace=True)
+    df = df.iloc[:, 1:]
+
+    return df
 
 class GA():
     def __init__(self):
 
-        self.df = FE.data_process()
+        self.df = data_process()
         self.population = []
         self.fitness = []
+        self.mutation = params["MUT"]
         self.num_offspring = params["NUM_OFFSPRING"]
         self.pop_size = params["POP_SIZE"]
         self.num_job = params["num_job"]
         self.time = self.df.loc["소요시간"]
         self.due = self.df.loc["제출기한"]
         self.weight = self.df.loc["성적반영비율"]
+        self.selection_pressure = params["SELECTION_PRESSURE"]
 
 
     def initial_population(self):
@@ -121,7 +128,7 @@ class GA():
         return fitness
 
 
-    def Roulette_wheel_selection(self, fitness):
+    def roulette_wheel_selection(self, fitness):
         """
         품질 비례 룰렛휠
         :param fitness: [job sequence[(int) * num_jobs], fitness(float)]
@@ -155,10 +162,80 @@ class GA():
         self.dad_ch = fitness[k][0]
 
 
-    def Sequence_crossover(self):
+    def tournament_selection(self, fitness):
+        """
+        토너먼트 선택
+        :param fitness: [job sequence[(int) * num_jobs], fitness(float)]
+        self.mom_ch: [job sequence[(int) * num_jobs]]
+        self.dad_ch: [job sequence[(int) * num_jobs]]
+        """
+        sample = random.sample(range(len(fitness)), 4)
+        k = np.random.random()
+
+
+        if (k < 0.55 + 0.04 * self.selection_pressure):
+            if (fitness[sample[0]][1] < fitness[sample[1]][1]):
+                self.mom_ch = fitness[sample[1]][0]
+            else:
+                self.mom_ch = fitness[sample[0]][0]
+        else:
+            if (fitness[sample[0]][1] < fitness[sample[1]][1]):
+                self.mom_ch = fitness[sample[0]][0]
+            else:
+                self.mom_ch = fitness[sample[1]][0]
+
+        k = np.random.random()
+        if (k < 0.55 + 0.04 * self.selection_pressure):
+            if (fitness[sample[2]][1] < fitness[sample[3]][1]):
+                self.dad_ch = fitness[sample[3]][0]
+            else:
+                self.dad_ch = fitness[sample[2]][0]
+        else:
+            if (fitness[sample[0]][1] < fitness[sample[1]][1]):
+                self.dad_ch = fitness[sample[2]][0]
+            else:
+                self.dad_ch = fitness[sample[3]][0]
+
+
+    def ranking_selection(self, fitness):
+        """
+        순위 기반 선택
+       :param fitness: [job sequence[(int) * num_jobs], fitness(float)]
+        self.mom_ch: [job sequence[(int) * num_jobs]]
+        self.dad_ch: [job sequence[(int) * num_jobs]]
+        """
+
+        selection = []
+        for i in range(len(fitness)):
+            selection.append(fitness[0][1] + (i - 1)*(fitness[-1][1] - fitness[0][1])/(len(fitness) - 1))
+
+        while (True):
+            temp1 = np.random.randint(0, sum(selection))
+            temp2 = np.random.randint(0, sum(selection))
+
+            for i in range(len(selection)):
+                temp1 -= selection[i]
+                if temp1 <= 0:
+                    p = i
+                    break
+
+            for i in range(len(selection)):
+                temp2 -= selection[i]
+                if temp2 <= 0:
+                    k = i
+                    break
+
+            if p != k:
+                break
+
+        self.mom_ch = fitness[p][0]
+        self.dad_ch = fitness[k][0]
+
+
+    def sequence_crossover(self):
         """
         순서 교차
-        :return:
+        :return: self.offspring_ch [offsprings[job sequence[(int) * num_job] * num_offsprings]]
         """
         self.offspring_ch = []
 
@@ -185,7 +262,8 @@ class GA():
                 if self.dad_ch[j] not in filter:
                     chromosome.append(self.dad_ch[j])
 
-            chromosome = self.mutation_operater(chromosome)
+            if self.mutation<random.random():
+                chromosome = self.displacement_mutation(chromosome)
 
             self.offspring_ch.append(chromosome)
 
@@ -224,12 +302,13 @@ class GA():
 
                 chromosome[j] = gene
 
-            chromosome = self.mutation_operater(chromosome)
+            if self.mutation<random.random():
+                chromosome = self.displacement_mutation(chromosome)
 
             self.offspring_ch.append(chromosome)
 
 
-    def Cycle_crossover(self):
+    def cycle_crossover(self):
         """
         싸이클 교차
         :return: self.offspring_ch [offsprings[job sequence[(int) * num_job] * num_offsprings]]
@@ -249,28 +328,59 @@ class GA():
                     gene = self.mom_ch[num]
                     chromosome[num] = gene          # 그 위치에 엄마 해의 gene값을 자식 해에 유전한다.
 
-            chromosome = self.mutation_operater(chromosome)   # 랜덤 숫자로 슬라이싱한 chromosome을 mutation_operater에 넣어줌
+            chromosome = self.displacement_mutation(chromosome)   # 랜덤 숫자로 슬라이싱한 chromosome을 mutation_operater에 넣어줌
 
 
             self.offspring_ch.append(chromosome)
 
 
-    def mutation_operater(self, chromosome):
-        # 랜덤에 걸릴 경우 chromosome의 앞뒤 자리를 바꿔줌
-        for i in range(len(chromosome)):
-            num = np.random.randint(10)
-            if len(chromosome) == 1:
-                pass
-            else:
-                if num >= (params["MUT"]*10):
-                    pass
-                else:
-                    if i == 0:
-                        chromosome[i], chromosome[i + 1] = chromosome[i + 1], chromosome[i]
-                    else:
-                        chromosome[i], chromosome[i - 1] = chromosome[i - 1], chromosome[i]
+    def displacement_mutation(self, chromosome):
+        """
+        displacement mutation
+        :param chromosome: [job sequence[(int) * num_job]]
+        :return: chromosome
+        """
+
+        slice = random.sample(range(self.num_job), 2)
+        slice.sort()
+        num = random.randint(0, self.num_job - (slice[1] - slice[0]))
+
+        n_chromosome = chromosome[0:slice[0]] + chromosome[slice[1]:self.num_job]
+        part = chromosome[slice[0]:slice[1]]
+
+        for i in part[::-1]:
+            n_chromosome.insert(num, i)
+
+        return n_chromosome
+
+
+    def exchange_mutation(self, chromosome):
+        """
+        EM
+        :param chromosome: [job sequence[(int) * num_job]]
+        :return: chromosome: [job sequence[(int) * num_job]]
+        """
+        slice = random.sample(range(self.num_job), 2)
+        chromosome[slice[0]], chromosome[slice[1]] = chromosome[slice[1]], chromosome[slice[0]]
 
         return chromosome
+
+
+    def scramble_mutation(self, chromosome):
+        """
+        SM
+        :param chromosome:
+        :return:
+        """
+        num = np.random.randint(0, self.num_job)
+        slice = random.sample(range(self.num_job), 2)
+        n_chromosome = chromosome[0:slice[0]] + chromosome[slice[1]:self.num_job]
+        part = chromosome[slice[0]:slice[1]]
+        part.shuffle()
+        for i in part:
+            n_chromosome.insert(num, chromosome[i])
+
+        return n_chromosome
 
 
     def replacement_operator(self):
@@ -298,8 +408,8 @@ class GA():
 
                # self.print_average_fitness(fitness)
 
-                self.Roulette_wheel_selection(fitness)
-                self.Sequence_crossover()
+                self.ranking_selection(fitness)
+                self.sequence_crossover()
                 self.replacement_operator()
 
                 for i in range(self.pop_size - 1):
@@ -319,8 +429,8 @@ class GA():
 
                 self.print_average_fitness(fitness)
 
-                self.selection_operater(fitness)
-                self.crossover_operater()
+                self.ranking_selection(fitness)
+                self.sequence_crossover()
                 self.replacement_operator()
 
                 for i in range(len(fitness)-1):
@@ -344,8 +454,8 @@ class GA():
                 # 평균 값 출력
                # self.print_average_fitness(fitness)
 
-                self.selection_operater(fitness)
-                self.crossover_operater()
+                self.ranking_selection(fitness)
+                self.sequence_crossover()
                 self.replacement_operator()
 
                 for i in range(len(fitness)-1):
@@ -362,9 +472,9 @@ class GA():
 def main():
 
     # 데이터를 생성하는 코드 (FullEnumeration과 동일한 자료로 코드를 돌리기 위해 주석)
-    # data_generator.gen_main(params["num_job"], params["oper_mean"], params["oper_sigma"],
-    #                         params["due_mean"], params["due_sigma"],
-    #                         params["weight_mean"],params["weight_sigma"])
+    data_generator.gen_main(params["num_job"], params["oper_mean"], params["oper_sigma"],
+                            params["due_mean"], params["due_sigma"],
+                            params["weight_mean"],params["weight_sigma"])
 
     ga = GA()
     ga.search()
@@ -373,12 +483,9 @@ def main():
 
 if __name__ == "__main__":
     t1 =time.time()
-    FE.params["num_job"] = params["num_job"]
-    FE.main()
-    t2 = time.time()
     main()
-    t3 = time.time()
-    print(f"FullEnumeration: {t2-t1}, GA: {t3-t2}")
+    t2 = time.time()
+    print(f"GA: {t2-t1}")
 
 
 
