@@ -3,9 +3,11 @@ import numpy as np
 import random
 import data_generator
 import time
+import plotly.graph_objs as go
+
 
 params = {
-    "num_job": 20,
+    "num_job": 100,
     "oper_mean": 10,
     "oper_sigma": 2,
     "due_mean": 20,
@@ -14,12 +16,13 @@ params = {
     "weight_sigma": 1,
     # "tardiness", "weighted_tardiness", "flow_time", "makespan"
     "consideration": ["flow_time"],
-    'MUT': 0.2,  # 변이확률(%)
-    'END': 0.8,  # 설정한 비율만큼 chromosome이 수렴하면 탐색을 멈추게 하는 파라미터 (%)
-    'POP_SIZE': 10,  # population size 10 ~ 100
-    'NUM_OFFSPRING': 5,  # 한 세대에 발생하는 자식 chromosome의 수
+    'MUT': 0.9,  # 변이확률(%)
+    'END': 0.9,  # 설정한 비율만큼 chromosome이 수렴하면 탐색을 멈추게 하는 파라미터 (%)
+    'POP_SIZE': 50,  # population size 10 ~ 100
+    'NUM_OFFSPRING': 25,  # 한 세대에 발생하는 자식 chromosome의 수
     'SELECTION_PRESSURE': 3  # 1보다 큰 정수 1< x < 10
 }
+
 def data_process():
     df = pd.read_csv("examdata.csv", encoding="CP949")
 
@@ -30,7 +33,9 @@ def data_process():
 
 class GA():
     def __init__(self):
-
+        self.generations = []
+        self.counts = []
+        self.generation = 0
         self.df = data_process()
         self.population = []
         self.fitness = []
@@ -135,6 +140,7 @@ class GA():
         self.mom_ch: [job sequence[(int) * num_jobs]]
         self.dad_ch: [job sequence[(int) * num_jobs]]
         """
+        # total tardiness를 최소화하게 spt rule로 정렬
 
         selection = [(fitness[-1][1] - fitness[i][1]) + (fitness[-1][1] - fitness[0][1])/(params['SELECTION_PRESSURE']-1)
                      for i in range(len(fitness))]
@@ -250,7 +256,6 @@ class GA():
                 if len(chromosome) == slice[0]:
                     for k in range(slice[0], slice[1]):
                         chromosome.append(self.mom_ch[k])
-
                 if self.dad_ch[j] not in filter:
                     chromosome.append(self.dad_ch[j])
 
@@ -258,11 +263,10 @@ class GA():
                 if len(chromosome) == slice[0]:
                     for k in range(slice[0], slice[1]):
                         chromosome.append(self.mom_ch[k])
-
                 if self.dad_ch[j] not in filter:
                     chromosome.append(self.dad_ch[j])
 
-            if self.mutation<random.random():
+            if self.mutation>random.random():
                 chromosome = self.displacement_mutation(chromosome)
 
             self.offspring_ch.append(chromosome)
@@ -278,7 +282,7 @@ class GA():
         for i in range(self.num_offspring):
             slice = random.sample(range(self.num_job), 2)
             slice.sort()
-            chromosome = [i for i in range(self.num_job)]
+            chromosome = [0]*100
             filter = self.mom_ch[slice[0]:slice[1]]
 
             for j in range(slice[0], slice[1]):
@@ -286,50 +290,20 @@ class GA():
 
             for j in range(0, slice[0]):
                 gene = self.dad_ch[j]
-
                 while(gene in filter):
                     num = self.mom_ch.index(gene)
                     gene = self.dad_ch[num]
-
                 chromosome[j] = gene
 
             for j in range(slice[1], self.num_job):
                 gene = self.dad_ch[j]
-
                 while (gene in filter):
                     num = self.mom_ch.index(gene)
                     gene = self.dad_ch[num]
-
                 chromosome[j] = gene
 
-            if self.mutation<random.random():
+            if self.mutation>random.random():
                 chromosome = self.displacement_mutation(chromosome)
-
-            self.offspring_ch.append(chromosome)
-
-
-    def cycle_crossover(self):
-        """
-        싸이클 교차
-        :return: self.offspring_ch [offsprings[job sequence[(int) * num_job] * num_offsprings]]
-        """
-        self.offspring_ch = []
-
-        for i in range(self.num_offspring):
-            sample = list(range(self.num_job))
-            chromosome = [i for i in range(self.num_job)]
-
-            for j in sample:
-                gene = self.mom_ch[j]
-                chromosome[j] = gene
-
-                while(self.mom_ch[j] != gene):
-                    num = sample.pop(self.dad_ch.index(gene))    # 아빠 해에서 선택된 gene과 동일한 값의 gene 있는 위치를 찾는다
-                    gene = self.mom_ch[num]
-                    chromosome[num] = gene          # 그 위치에 엄마 해의 gene값을 자식 해에 유전한다.
-
-            chromosome = self.displacement_mutation(chromosome)   # 랜덤 숫자로 슬라이싱한 chromosome을 mutation_operater에 넣어줌
-
 
             self.offspring_ch.append(chromosome)
 
@@ -340,14 +314,11 @@ class GA():
         :param chromosome: [job sequence[(int) * num_job]]
         :return: chromosome
         """
-
         slice = random.sample(range(self.num_job), 2)
         slice.sort()
         num = random.randint(0, self.num_job - (slice[1] - slice[0]))
-
         n_chromosome = chromosome[0:slice[0]] + chromosome[slice[1]:self.num_job]
         part = chromosome[slice[0]:slice[1]]
-
         for i in part[::-1]:
             n_chromosome.insert(num, i)
 
@@ -361,6 +332,7 @@ class GA():
         :return: chromosome: [job sequence[(int) * num_job]]
         """
         slice = random.sample(range(self.num_job), 2)
+        slice.sort()
         chromosome[slice[0]], chromosome[slice[1]] = chromosome[slice[1]], chromosome[slice[0]]
 
         return chromosome
@@ -372,13 +344,14 @@ class GA():
         :param chromosome:
         :return:
         """
-        num = np.random.randint(0, self.num_job)
         slice = random.sample(range(self.num_job), 2)
+        slice.sort()
         n_chromosome = chromosome[0:slice[0]] + chromosome[slice[1]:self.num_job]
+        num = np.random.randint(0, len(n_chromosome))
         part = chromosome[slice[0]:slice[1]]
-        part.shuffle()
+        random.shuffle(part)
         for i in part:
-            n_chromosome.insert(num, chromosome[i])
+            n_chromosome.insert(num, i)
 
         return n_chromosome
 
@@ -388,61 +361,78 @@ class GA():
         self.population = self.population[0:(self.pop_size - self.num_offspring)] + self.offspring_ch
 
 
-    def print_result(self, fitness, generation):
+    def print_result(self, fitness):
 
-        print(f"탐색이 완료되었습니다. \t 최종 세대수: {generation},\t 최종 해: {fitness[0][0]},\t 최종 적합도: {fitness[0][1]}")
+        print(f"탐색이 완료되었습니다. \t 최종 세대수: {self.generation},\t 최종 해: {fitness[0][0]},\t 최종 적합도: {fitness[0][1]}")
 
 
     def search(self):
 
-        generation = 0
         # 초기 population 생성
         self.initial_population()
 
         if "flow_time" in params["consideration"]:
             while True:
-                count = 1
+                count = 0
 
                 w_fitness = self.flow_time_get_fitness()
                 fitness = self.sort_population(w_fitness)
 
                # self.print_average_fitness(fitness)
 
-                self.ranking_selection(fitness)
-                self.sequence_crossover()
+                self.tournament_selection(fitness)
+                self.PMX_crossover()
                 self.replacement_operator()
-
                 for i in range(self.pop_size - 1):
                     if fitness[i][1] == fitness[i + 1][1]:
                         count += 1
-                if (count == (params["END"] * 10)):
-                    self.print_result(fitness, generation)
 
+                if self.generation % 100 == 0:
+                    self.counts.append(count)
+                    self.generations.append(self.generation)
+
+                if (count == (params["END"] * self.pop_size)):
+                    self.print_result(fitness)
                     break
-                generation += 1
+
+                if (time.time() - t1 > 590):
+                    self.print_result(fitness)
+                    break
+
+
+
+                self.generation += 1
 
         if "tardiness" in params["consideration"]:
             while True:
-                count = 1
+                count = 0
                 w_fitness = self.tardiness_get_fitness()
                 fitness = self.sort_population(w_fitness)
 
-                self.print_average_fitness(fitness)
+                # self.print_average_fitness(fitness)
 
                 self.ranking_selection(fitness)
-                self.sequence_crossover()
+                self.PMX_crossover()
                 self.replacement_operator()
 
                 for i in range(len(fitness)-1):
                     if fitness[i][1] == fitness[i+1][1]:
                         count += 1
 
-                if (count == params["END"]*10):
-                    self.print_result(fitness, generation)
+                if self.generation % 100 == 0:
+                    self.counts.append(count)
+                    self.generations.append(self.generation)
+
+                if (count == params["END"]*self.pop_size):
+                    self.print_result(fitness)
 
                     break
 
-                generation += 1
+                if (time.time() - t1 > 590):
+                    self.print_result(fitness)
+                    break
+
+                self.generation += 1
 
         if "weighted_tardiness" in params["consideration"]:
             while True:
@@ -454,40 +444,51 @@ class GA():
                 # 평균 값 출력
                # self.print_average_fitness(fitness)
 
-                self.ranking_selection(fitness)
-                self.sequence_crossover()
+                self.roulette_wheel_selection(fitness)
+                self.PMX_crossover()
                 self.replacement_operator()
 
                 for i in range(len(fitness)-1):
                     if fitness[i][1] == fitness[i+1][1]:
                         count += 1
-                if (count == params["END"]*10):
-                    self.print_result(fitness, generation)
+
+                if self.generation % 100 == 0:
+                    self.counts.append(count)
+                    self.generations.append(self.generation)
+
+
+                if (count == params["END"]*self.pop_size):
+                    self.print_result(fitness)
 
                     break
 
-                generation += 1
+                if (time.time() - t1 > 590):
+                    self.print_result(fitness)
+                    break
+
+                self.generation += 1
+
+
+
 
 
 def main():
 
     # 데이터를 생성하는 코드 (FullEnumeration과 동일한 자료로 코드를 돌리기 위해 주석)
-    data_generator.gen_main(params["num_job"], params["oper_mean"], params["oper_sigma"],
-                            params["due_mean"], params["due_sigma"],
-                            params["weight_mean"],params["weight_sigma"])
+    # data_generator.gen_main(params["num_job"], params["oper_mean"], params["oper_sigma"],
+    #                         params["due_mean"], params["due_sigma"],
+    #                         params["weight_mean"],params["weight_sigma"])
 
     ga = GA()
     ga.search()
 
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=ga.generations, y=ga.counts, mode='lines', name="GA"))
+    fig.update_layout(scene=dict(xaxis_title='Generation', yaxis_title='Count', zaxis_title='Fitness'), xaxis=dict(tickfont=dict(size=15)), yaxis=dict(tickfont=dict(size=15)))
+    fig.show()
 
 
 if __name__ == "__main__":
-    t1 =time.time()
-    main()
-    t2 = time.time()
-    print(f"GA: {t2-t1}")
-
-
-
-
-
+    for i in range(10):
+        t1 =time.time()
+        main()
