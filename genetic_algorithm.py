@@ -33,6 +33,7 @@ def data_process():
 
 class GA():
     def __init__(self):
+        self.fitnesses = []
         self.generations = []
         self.counts = []
         self.generation = 0
@@ -48,13 +49,11 @@ class GA():
         self.weight = self.df.loc["성적반영비율"]
         self.selection_pressure = params["SELECTION_PRESSURE"]
 
-
     def initial_population(self):
         self.population = []
 
         for i in range(self.pop_size):
             self.population.append(random.sample(range(self.num_job), self.num_job))
-
 
     def flow_time_calaulator(self, chromosome):
         flow_time = [0 for i in range(len(chromosome))]
@@ -66,7 +65,6 @@ class GA():
 
         return sum(flow_time)
 
-
     def tardiness_calculator(self, chromosome):
         tardiness = [0 for i in range(len(chromosome))]
         makespan = 0
@@ -76,7 +74,6 @@ class GA():
             makespan += self.time[j]
 
         return sum(tardiness)
-
 
     def weight_tardiness_calaulator(self, chromosome):
         weight_tardiness = 0
@@ -88,7 +85,6 @@ class GA():
 
         return weight_tardiness
 
-
     def flow_time_get_fitness(self):
         flow_time_fitness = []
 
@@ -96,7 +92,6 @@ class GA():
             flow_time_fitness.append([chrom, self.flow_time_calaulator(chrom)])
 
         return flow_time_fitness
-
 
     def tardiness_get_fitness(self):
         tardiness_fitness = []
@@ -106,7 +101,6 @@ class GA():
 
         return tardiness_fitness
 
-
     def weighted_tardiness_get_fitness(self):
         weighted_tardiness_fitness = []
 
@@ -114,7 +108,6 @@ class GA():
             weighted_tardiness_fitness.append([self.population[i], self.weight_tardiness_calaulator(self.population[i])])
 
         return weighted_tardiness_fitness
-
 
     def print_average_fitness(self, fitness):
         population_average_fitness = 0
@@ -380,8 +373,8 @@ class GA():
 
                # self.print_average_fitness(fitness)
 
-                self.tournament_selection(fitness)
-                self.PMX_crossover()
+                self.roulette_wheel_selection(fitness)
+                self.sequence_crossover()
                 self.replacement_operator()
                 for i in range(self.pop_size - 1):
                     if fitness[i][1] == fitness[i + 1][1]:
@@ -390,12 +383,13 @@ class GA():
                 if self.generation % 100 == 0:
                     self.counts.append(count)
                     self.generations.append(self.generation)
+                    self.fitnesses.append(fitness[0][1])
 
                 if (count == (params["END"] * self.pop_size)):
                     self.print_result(fitness)
                     break
 
-                if (time.time() - t1 > 590):
+                if (time.time() - t1 > 1000):
                     self.print_result(fitness)
                     break
 
@@ -428,7 +422,7 @@ class GA():
 
                     break
 
-                if (time.time() - t1 > 590):
+                if (time.time() - t1 > 1000):
                     self.print_result(fitness)
                     break
 
@@ -468,8 +462,18 @@ class GA():
 
                 self.generation += 1
 
+    def find_real_flowtime(self):
+        # self.df 소요시간 column의 값 순으로 정렬
+        self.time = self.df.loc["소요시간"].tolist()
+        self.time.sort()
+        flow_time = [0 for i in range(len(self.time))]
+        makespan = 0
 
+        for j in range(len(self.time)):
+            flow_time[j] = makespan + self.time[j]
+            makespan += self.time[j]
 
+        print(sum(flow_time))
 
 
 def main():
@@ -483,12 +487,15 @@ def main():
     ga.search()
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=ga.generations, y=ga.counts, mode='lines', name="GA"))
-    fig.update_layout(scene=dict(xaxis_title='Generation', yaxis_title='Count', zaxis_title='Fitness'), xaxis=dict(tickfont=dict(size=15)), yaxis=dict(tickfont=dict(size=15)))
+    fig.add_trace(go.Scatter(x=ga.generations, y=ga.counts, mode='lines', name="COUNTS"))
+    fig.update_layout(scene=dict(xaxis_title='Generation', yaxis_title='Count'), xaxis=dict(tickfont=dict(size=50)), yaxis=dict(tickfont=dict(size=50)))
     fig.show()
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(x=ga.generations, y=ga.fitnesses, mode='lines', name="FITNESS"))
+    fig1.update_layout(scene=dict(xaxis_title='Generation', yaxis_title='Fitness'), xaxis=dict(tickfont=dict(size=50)), yaxis=dict(tickfont=dict(size=50)))
+    fig1.show()
 
 
 if __name__ == "__main__":
-    for i in range(10):
-        t1 =time.time()
-        main()
+    t1 =time.time()
+    main()
