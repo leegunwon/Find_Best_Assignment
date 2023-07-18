@@ -32,7 +32,7 @@ class SingleMachine():
 
         fitness = self.cal_tardiness()
 
-        reward = s - fitness
+        reward = (s - fitness)*self.action_num
 
         self.action_num -= 1
         done = self.is_done()
@@ -44,9 +44,10 @@ class SingleMachine():
         makespan = 0
         due = self.df.loc["제출기한"]
         dur = self.df.loc["소요시간"]
-
-        for i in range(len(self.action_history)):
-            tardiness[i] = max(0, (makespan + dur[i] -due[i]))
+        j = 0
+        for i in self.action_history:
+            tardiness[j] = max(0, (makespan + dur[i] -due[i]))
+            j += 1
             makespan += dur[i]
 
         return sum(tardiness)
@@ -77,7 +78,6 @@ class QAgent():
     def select_action(self, s, action_list, action_num):
         # eps-greedy로 액션을 선택해준다
         # 같은 fitness 상태에서 사용했던 action을 회피할 알고리즘 = action_list for문 돌려서 수동으로 최대값 산출
-
         # q 테이블에 state가 없으면 추가해준다
         if s not in self.q_table.keys():
             self.q_table[s] = {i:0 for i in range(100)}
@@ -90,8 +90,10 @@ class QAgent():
 
         else:
             count = 0
+            action = 0
+            ccount = 0
+            maxx = self.q_table[s][action_list[0]]
             for i in action_list:
-                maxx = self.q_table[s][action_list[0]]
                 if (self.q_table[s][i] >= maxx):
                     maxx = self.q_table[s][i]
                     action = i
@@ -109,10 +111,11 @@ class QAgent():
 
             # 몬테 카를로 방식을 이용하여 업데이트.
             cum_reward = cum_reward + r
-            self.q_table[s][a] = self.q_table[s][a] + 0.01 * (cum_reward - self.q_table[s][a])
+            self.q_table[s][a] = self.q_table[s][a] + 1 * (cum_reward - self.q_table[s][a])
+
 
     def anneal_eps(self):
-        self.eps -= 0.005
+        self.eps -= 0.0000005
         self.eps = max(self.eps, 0.1)
 
     def show_table(self):
@@ -124,7 +127,7 @@ def main():
     env = SingleMachine(data_process())
     agent = QAgent()
 
-    for n_epi in range(500):
+    for n_epi in range(50000):
         done = False
         s = env.reset()
 
@@ -139,6 +142,7 @@ def main():
         agent.update_table(env.history)
         agent.anneal_eps()
 
+
     agent.eps = 0
 
     done = False
@@ -151,6 +155,7 @@ def main():
         s = s_prime
     print(env.action_history)
     print(env.cal_tardiness())
+
 
 if __name__ == '__main__':
     main()
